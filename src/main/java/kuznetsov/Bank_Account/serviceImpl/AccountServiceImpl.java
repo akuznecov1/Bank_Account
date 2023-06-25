@@ -6,7 +6,10 @@ import kuznetsov.Bank_Account.exception.OperationBankException;
 import kuznetsov.Bank_Account.model.dto.AccountDto;
 import kuznetsov.Bank_Account.model.dto.OperationDto;
 import kuznetsov.Bank_Account.model.entity.Account;
+import kuznetsov.Bank_Account.model.entity.Transaction;
+import kuznetsov.Bank_Account.model.enums.Operation;
 import kuznetsov.Bank_Account.repository.AccountRepository;
+import kuznetsov.Bank_Account.repository.TransactionRepository;
 import kuznetsov.Bank_Account.service.AccountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,6 +17,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,6 +28,8 @@ import java.util.Optional;
 public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
+
+    private final TransactionRepository transactionRepository;
 
     @Override
     public Optional<Account> createAccount(AccountDto accountDto) {
@@ -66,6 +73,18 @@ public class AccountServiceImpl implements AccountService {
 
         BigDecimal newBalance = account.getBalance().add(operationDto.getBalance());
         account.setBalance(newBalance);
+
+        Transaction transaction = Transaction.builder()
+                .accountFrom(null)
+                .name(optionalAccount.get().getName())
+                .accountTo(accountNumber)
+                .operation(Operation.DEPOSIT)
+                .balance(newBalance)
+                .time(LocalDateTime.now().toString())
+                .build();
+
+        transactionRepository.save(transaction);
+
         accountRepository.save(account);
 
     }
@@ -85,9 +104,21 @@ public class AccountServiceImpl implements AccountService {
             throw new InvalidPinCodeException("Неверный пинкод ");
         }
 
-        account.get().setBalance(account.get().getBalance().subtract(operationDto.getBalance()));
+        BigDecimal newBalance = account.get().getBalance().subtract(operationDto.getBalance());
+
+        account.get().setBalance(newBalance);
+
+        Transaction transaction = Transaction.builder()
+                .accountFrom(accountNumber)
+                .name(account.get().getName())
+                .balance(newBalance)
+                .time(LocalDateTime.now().toString())
+                .operation(Operation.WITHDRAW)
+                .build();
 
         accountRepository.save(account.get());
+
+        transactionRepository.save(transaction);
 
     }
 
@@ -115,8 +146,16 @@ public class AccountServiceImpl implements AccountService {
 
         accountTo.get().setBalance(accountTo.get().getBalance().add(operationDto.getBalance()));
 
-        System.out.println(accountFrom);
-        System.out.println(accountTo);
+        Transaction transaction = Transaction.builder()
+                .accountFrom(fromAccountNumber)
+                .accountTo(toAccountNumber)
+                .name(accountFrom.get().getName())
+                .operation(Operation.TRANSFER)
+                .time(LocalDateTime.now().toString())
+                .balance(operationDto.getBalance())
+                .build();
+
+        transactionRepository.save(transaction);
 
         accountRepository.save(accountFrom.get());
 
